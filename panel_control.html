@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Panel Control · Meridiano70</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,Helvetica,sans-serif;background:#f0f2f5;padding:16px;max-width:680px;margin:0 auto;}
+.hdr-ctrl{background:#E85015;border-radius:10px;padding:14px 20px;margin-bottom:16px;}
+.hdr-ctrl h1{font-size:18px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.06em;}
+.hdr-ctrl p{font-size:12px;color:rgba(255,255,255,.8);margin-top:3px;}
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.07);}
+.card h2{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#333;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #E85015;}
+.fila{display:flex;gap:10px;}
+.campo{flex:1;}
+.campo label{display:block;font-size:11px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;}
+.campo input{width:100%;padding:9px 11px;border:1.5px solid #ddd;border-radius:7px;font-size:15px;font-family:Arial;font-weight:700;color:#222;}
+.campo input:focus{border-color:#E85015;outline:none;}
+.cand-row{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #f2f2f2;}
+.cand-row:last-child{border-bottom:none;}
+.nom-txt{font-size:14px;font-weight:700;color:#222;}
+.form-txt{font-size:11px;color:#bbb;margin-top:1px;}
+.btn-pub{width:100%;padding:15px;background:#E85015;color:#fff;border:none;border-radius:9px;font-size:17px;font-weight:900;font-family:Arial;cursor:pointer;text-transform:uppercase;letter-spacing:.08em;}
+.btn-pub:hover{background:#c94010;}
+.btn-pub:disabled{background:#ccc;cursor:not-allowed;}
+.btn-limpiar{width:100%;padding:10px;background:transparent;color:#999;border:1.5px solid #ddd;border-radius:9px;font-size:14px;font-weight:700;font-family:Arial;cursor:pointer;margin-top:8px;}
+.status{text-align:center;font-size:14px;font-weight:700;padding:12px;border-radius:7px;margin-top:10px;display:none;}
+.status.ok{background:#e8f5e9;color:#2e7d32;display:block;}
+.status.err{background:#ffebee;color:#c62828;display:block;}
+.status.loading{background:#e3f2fd;color:#1565c0;display:block;}
+.instruc{background:#fff8f4;border:1.5px solid #ffd0b8;border-radius:8px;padding:14px;font-size:12px;color:#666;line-height:1.7;margin-bottom:14px;}
+.instruc strong{color:#E85015;}
+.dot{display:inline-block;width:8px;height:8px;background:#E85015;border-radius:50%;margin-right:6px;}
+.conexion-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;margin-left:10px;}
+.conexion-badge.ok{background:#e8f5e9;color:#2e7d32;}
+.conexion-badge.err{background:#ffebee;color:#c62828;}
+</style>
+</head>
+<body>
+
+<div class="hdr-ctrl">
+  <h1>Panel de Control Electoral <span id="conexion-badge" class="conexion-badge err">⚡ Conectando...</span></h1>
+  <p>Elecciones Presidenciales 2026 · Primera vuelta · 31 de mayo · Meridiano70 Arauca</p>
+</div>
+
+<div class="instruc">
+  <strong>Cómo usar:</strong><br>
+  <span class="dot"></span>Abre <strong>pantalla_tv.html</strong> o <strong>pantalla_top2.html</strong> en el equipo del operador<br>
+  <span class="dot"></span>En OBS: Fuente → Captura de ventana → Chrome → F11 pantalla completa<br>
+  <span class="dot"></span>Ingresa los datos aquí y pulsa <strong>PUBLICAR</strong><br>
+  <span class="dot"></span>Las pantallas se actualizan en menos de 2 segundos desde cualquier equipo
+</div>
+
+<div class="card">
+  <h2>Datos del boletín</h2>
+  <div class="fila">
+    <div class="campo"><label>Boletín N°</label><input type="number" id="boletin" value="1" min="1" max="99"></div>
+    <div class="campo"><label>% Mesas escrutadas</label><input type="number" id="pctMesas" value="0" step="0.1" min="0" max="100"></div>
+    <div class="campo"><label>Total votos contados</label><input type="number" id="totalVotos" value="0" min="0"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Votos por candidato</h2>
+  <div id="grid-control"></div>
+</div>
+
+<button class="btn-pub" id="btn-pub" onclick="publicar()">📡 &nbsp; Publicar en pantalla TV</button>
+<button class="btn-limpiar" onclick="limpiar()">↺ &nbsp; Limpiar · Preparar siguiente boletín</button>
+<div class="status" id="status"></div>
+
+<script>
+const FIREBASE_URL = 'https://meridiano70-elecciones-default-rtdb.firebaseio.com/boletin.json';
+const CANDS = [
+  {pos:1,  nombre:"Iván Cepeda Castro",       formula:"Aída Marina Quilcué Vivas",          color:"#e8192c"},
+  {pos:3,  nombre:"Claudia López Hernández",  formula:"Leonardo Humberto Huerta Gutiérrez", color:"#ff8c00"},
+  {pos:5,  nombre:"Abelardo de la Espriella", formula:"José Manuel Restrepo Abondano",      color:"#00b894"},
+  {pos:12, nombre:"Paloma Valencia Laserna",  formula:"Juan Daniel Oviedo Arango",          color:"#9b19f5"},
+  {pos:13, nombre:"Sergio Fajardo Valderrama",formula:"Edna Cristina Bonilla Seba",         color:"#0984e3"}
+];
+
+// Verificar conexión al cargar
+async function verificarConexion() {
+  const badge = document.getElementById('conexion-badge');
+  try {
+    const res = await fetch(FIREBASE_URL, {cache:'no-store'});
+    if (res.ok) {
+      badge.textContent = '✅ Firebase conectado';
+      badge.className = 'conexion-badge ok';
+    } else throw new Error();
+  } catch(e) {
+    badge.textContent = '❌ Sin conexión';
+    badge.className = 'conexion-badge err';
+  }
+}
+verificarConexion();
+
+// Construir formulario
+const grid = document.getElementById('grid-control');
+CANDS.forEach((c,i) => {
+  const row = document.createElement('div');
+  row.className = 'cand-row';
+  row.innerHTML = `<div><div class="nom-txt">${c.pos}. ${c.nombre}</div><div class="form-txt">${c.formula}</div></div><input type="number" id="v${i}" value="0" min="0" style="padding:8px 10px;border:1.5px solid #ddd;border-radius:7px;font-size:16px;font-weight:700;font-family:Arial;color:#222;width:100%;text-align:right;">`;
+  grid.appendChild(row);
+});
+
+async function publicar() {
+  const btn = document.getElementById('btn-pub');
+  const st  = document.getElementById('status');
+  btn.disabled = true;
+  st.className = 'status loading';
+  st.textContent = '⏳ Publicando...';
+
+  const boletin    = parseInt(document.getElementById('boletin').value) || 1;
+  const pctMesas   = parseFloat(document.getElementById('pctMesas').value) || 0;
+  const totalVotos = parseInt(document.getElementById('totalVotos').value) || 0;
+  const candidatos = CANDS.map((c,i) => ({
+    nombre: c.nombre,
+    votos: parseInt(document.getElementById('v'+i).value) || 0
+  }));
+  const ahora = new Date();
+  const hora = ahora.getHours().toString().padStart(2,'0')+':'+ahora.getMinutes().toString().padStart(2,'0');
+  const payload = {boletin, pctMesas, totalVotos, hora, candidatos};
+
+  try {
+    const res = await fetch(FIREBASE_URL, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    st.className = 'status ok';
+    st.textContent = `✅ Boletín ${boletin} publicado a las ${hora} — pantallas actualizándose...`;
+  } catch(e) {
+    st.className = 'status err';
+    st.textContent = `❌ Error al publicar: ${e.message} — verifica la conexión`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function limpiar() {
+  document.getElementById('boletin').value = (parseInt(document.getElementById('boletin').value)||1)+1;
+  document.getElementById('pctMesas').value = 0;
+  document.getElementById('totalVotos').value = 0;
+  CANDS.forEach((_,i) => document.getElementById('v'+i).value = 0);
+  document.getElementById('status').className = 'status';
+}
+</script>
+</body></html>
